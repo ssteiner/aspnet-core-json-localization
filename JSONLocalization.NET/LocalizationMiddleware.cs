@@ -1,7 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
-using System;
-using System.Globalization;
-using System.Linq;
+using Microsoft.AspNetCore.Localization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,23 +9,15 @@ namespace JSONLocalization.NET
     {
         public async Task InvokeAsync(HttpContext context, RequestDelegate next)
         {
-            var cultureKey = context.Request.Headers["Accept-Language"];
-            if (!string.IsNullOrEmpty(cultureKey))
+            var feat = context.Features.Get<IRequestCultureFeature>();
+            var requestCulture = feat.RequestCulture;
+            if (requestCulture != null)
             {
-                if (DoesCultureExist(cultureKey))
-                {
-                    var culture = new System.Globalization.CultureInfo(cultureKey);
-                    Thread.CurrentThread.CurrentCulture = culture;
-                    Thread.CurrentThread.CurrentUICulture = culture;
-                }
+                Thread.CurrentThread.CurrentCulture = requestCulture.Culture;
+                Thread.CurrentThread.CurrentUICulture = requestCulture.UICulture;
             }
-
             await next(context);
         }
 
-        private static bool DoesCultureExist(string cultureName)
-        {
-            return CultureInfo.GetCultures(CultureTypes.AllCultures).Any(culture => string.Equals(culture.Name, cultureName, StringComparison.CurrentCultureIgnoreCase));
-        }
     }
 }
