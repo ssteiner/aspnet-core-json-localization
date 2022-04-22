@@ -14,9 +14,9 @@ namespace JSONLocalization.NET
         }
 
         public IStringLocalizer Create(Type resourceSource) =>
-            new JsonStringLocalizer(_cache);
+            new JsonStringLocalizer(_cache, resourceSource.Name);
 
         public IStringLocalizer Create(string baseName, string location) =>
-            new JsonStringLocalizer(_cache);
+            new JsonStringLocalizer(_cache, baseName, location);
     }
 }
