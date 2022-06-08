@@ -8,6 +8,7 @@ namespace JsonLocalizationLib
     {
 
         private readonly IDistributedCache _cache;
+        private readonly bool useUiCulture = true;
 
         //private readonly JsonSerializer _serializer = new();
 
@@ -64,16 +65,19 @@ namespace JsonLocalizationLib
             }
             if (includeParentCultures && !Thread.CurrentThread.CurrentCulture.IsNeutralCulture)
             {
-                cultureName = GetCultureName(true);
-                keyListKey = $"keys_{ResourcePrefix}.{cultureName}";
-                existingKeysString = _cache.GetString(keyListKey);
-                if (existingKeysString != null)
-                    existingKeys = JsonConvert.DeserializeObject<List<string>>(existingKeysString);
-                if (existingKeys != null)
+                var parentCultureName = GetCultureName(true);
+                if (parentCultureName != cultureName)
                 {
-                    foreach (var key in existingKeys)
+                    keyListKey = $"keys_{ResourcePrefix}.{parentCultureName}";
+                    existingKeysString = _cache.GetString(keyListKey);
+                    if (existingKeysString != null)
+                        existingKeys = JsonConvert.DeserializeObject<List<string>>(existingKeysString);
+                    if (existingKeys != null)
                     {
-                        result.Add(new LocalizedString(key, _cache.GetString(GetKeyName(key, cultureName)), false));
+                        foreach (var key in existingKeys)
+                        {
+                            result.Add(new LocalizedString(key, _cache.GetString(GetKeyName(key, parentCultureName)), false));
+                        }
                     }
                 }
             }
@@ -137,12 +141,12 @@ namespace JsonLocalizationLib
             return $"{ResourcePrefix}.{cultureName}.{key}";
         }
 
-        private static string GetCultureName(bool useParentCulture = false)
+        private string GetCultureName(bool useParentCulture = false)
         {
             if (useParentCulture && !Thread.CurrentThread.CurrentCulture.IsNeutralCulture)
-                return Thread.CurrentThread.CurrentCulture.Parent.Name;
+                return useUiCulture ? Thread.CurrentThread.CurrentUICulture.Name : Thread.CurrentThread.CurrentCulture.Parent.Name;
             else
-                return Thread.CurrentThread.CurrentCulture.Name;
+                return useUiCulture ? Thread.CurrentThread.CurrentUICulture.Name : Thread.CurrentThread.CurrentCulture.Parent.Name;
         }
 
         private string ResourcePrefix => _resourceSource ?? _baseName ?? string.Empty;

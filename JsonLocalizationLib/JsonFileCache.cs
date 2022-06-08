@@ -51,6 +51,21 @@ namespace JsonLocalizationLib
             resourceFileWatcher.EnableRaisingEvents = true;
         }
 
+        public void Stop()
+        {
+            try
+            {
+                resourceFileWatcher.EnableRaisingEvents = false;
+                resourceFileWatcher.Changed -= ResourceFileWatcher_Changed;
+                resourceFileWatcher.Created -= ResourceFileWatcher_Created;
+                resourceFileWatcher.Renamed -= ResourceFileWatcher_Renamed;
+                resourceFileWatcher.Deleted -= ResourceFileWatcher_Deleted;
+                resourceFileWatcher.Error -= ResourceFileWatcher_Error;
+                resourceFileWatcher.Dispose();
+            }
+            catch (Exception) { }
+        }
+
         private void ResourceFileWatcher_Deleted(object sender, FileSystemEventArgs e)
         {
             FileRemoved(e.FullPath);
