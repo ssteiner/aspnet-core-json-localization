@@ -32,6 +32,8 @@ namespace JsonLocalizationLib
             get
             {
                 string value = GetString(name);
+                if (value == null)
+                    value = GetString(name, true);
                 return new LocalizedString(name, value ?? name, value == null);
             }
         }
@@ -113,9 +115,9 @@ namespace JsonLocalizationLib
         //    }
         //}
 
-        private string GetString(string key)
+        private string GetString(string key, bool useParentCulture = false)
         {
-            var keyName = GetKeyName(key);
+            var keyName = GetKeyName(key, useParentCulture);
             return _cache.GetString(keyName);
             //string relativeFilePath = GetResourceFilePath();
             //string fullFilePath = Path.GetFullPath(relativeFilePath);
@@ -144,7 +146,7 @@ namespace JsonLocalizationLib
         private string GetCultureName(bool useParentCulture = false)
         {
             if (useParentCulture && !Thread.CurrentThread.CurrentCulture.IsNeutralCulture)
-                return useUiCulture ? Thread.CurrentThread.CurrentUICulture.Name : Thread.CurrentThread.CurrentCulture.Parent.Name;
+                return useUiCulture ? Thread.CurrentThread.CurrentUICulture.Parent.Name : Thread.CurrentThread.CurrentCulture.Parent.Name;
             else
                 return useUiCulture ? Thread.CurrentThread.CurrentUICulture.Name : Thread.CurrentThread.CurrentCulture.Parent.Name;
         }
