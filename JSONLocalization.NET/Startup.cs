@@ -1,10 +1,10 @@
+using JsonLocalizationLib.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Localization;
 using Microsoft.OpenApi.Models;
 using System.Globalization;
 
@@ -22,12 +22,7 @@ namespace JSONLocalization.NET
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddLocalization();
-            services.AddHttpContextAccessor();
-            services.AddSingleton<LocalizationMiddleware>();
-            services.AddDistributedMemoryCache();
-            services.AddSingleton<IStringLocalizerFactory, JsonStringLocalizerFactory>();
-            services.AddSingleton<JsonFileCache>();
+            services.EnableJsonFileLocalization();
             services.AddControllers();
             services.AddSwaggerGen(c =>
             {
@@ -38,14 +33,9 @@ namespace JSONLocalization.NET
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            //var options = new RequestLocalizationOptions
-            //{
-            //    DefaultRequestCulture = new RequestCulture(new CultureInfo("en-US"))
-            //};
-            //app.UseRequestLocalization(options);
-            ConfigureLocalization(app);
+            var options = GetLocalizationOptions();
+            app.ConfigureJsonFileLocalization(options);
             app.UseStaticFiles();
-            app.UseMiddleware<LocalizationMiddleware>();
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -63,16 +53,9 @@ namespace JSONLocalization.NET
             {
                 endpoints.MapControllers();
             });
-
-            var fileCache = app.ApplicationServices.GetService<JsonFileCache>();
-            System.Threading.Tasks.Task.Run(() => fileCache.Start());
         }
 
-        /// <summary>
-        /// configure supported cultures and UI cultures and defaults
-        /// </summary>
-        /// <param name="app"></param>
-        private void ConfigureLocalization(IApplicationBuilder app)
+        private static RequestLocalizationOptions GetLocalizationOptions()
         {
             //set supported cultures and default culture
             var supportedCultures = new[]
@@ -89,12 +72,13 @@ namespace JSONLocalization.NET
                 new CultureInfo("fr-CH"),
                 new CultureInfo("it-CH"),
             };
-            app.UseRequestLocalization(new RequestLocalizationOptions
+            return new RequestLocalizationOptions
             {
                 DefaultRequestCulture = new RequestCulture("en-US"),
                 SupportedUICultures = supportedUICultures,
                 SupportedCultures = supportedCultures
-            });
+            };
         }
+
     }
 }

@@ -1,9 +1,6 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Localization;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using Microsoft.AspNetCore.Localization;
 
-namespace JSONLocalization.NET
+namespace JsonLocalizationLib
 {
     public class LocalizationMiddleware : IMiddleware
     {

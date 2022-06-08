@@ -1,16 +1,11 @@
 ﻿using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Localization;
-using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace JSONLocalization.NET
+namespace JsonLocalizationLib
 {
     public class JsonFileCache
     {
@@ -19,7 +14,7 @@ namespace JSONLocalization.NET
         private readonly ILogger logger;
         private readonly ConcurrentDictionary<string, string> fileHashes;
         private readonly string resourceLocation = "Resources";
-        private readonly JsonSerializer _serializer = new JsonSerializer();
+        private readonly JsonSerializer _serializer = new();
         private readonly FileSystemWatcher resourceFileWatcher;
         private readonly string resourceFilePattern = "*.json";
 
@@ -193,19 +188,15 @@ namespace JSONLocalization.NET
 
         public static string ComputeFileChecksum(string path)
         {
-            using (var fs = File.OpenRead(path))
+            using var fs = File.OpenRead(path);
+            using var sha1 = SHA1.Create();
+            byte[] hash = sha1.ComputeHash(fs);
+            var formatted = new StringBuilder(2 * hash.Length);
+            foreach (byte b in hash)
             {
-                using (var sha1 = new SHA1Managed())
-                {
-                    byte[] hash = sha1.ComputeHash(fs);
-                    var formatted = new StringBuilder(2 * hash.Length);
-                    foreach (byte b in hash)
-                    {
-                        formatted.AppendFormat("{0:X2}", b);
-                    }
-                    return formatted.ToString();
-                }
+                formatted.AppendFormat("{0:X2}", b);
             }
+            return formatted.ToString();
         }
 
 

@@ -1,18 +1,15 @@
 ﻿using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Localization;
 using Newtonsoft.Json;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
 
-namespace JSONLocalization.NET
+namespace JsonLocalizationLib
 {
     public class JsonStringLocalizer : IStringLocalizer
     {
 
         private readonly IDistributedCache _cache;
 
-        private readonly JsonSerializer _serializer = new JsonSerializer();
+        //private readonly JsonSerializer _serializer = new();
 
         private readonly string _resourceSource, _location = "Resources", _baseName;
 
@@ -51,7 +48,7 @@ namespace JSONLocalization.NET
 
         public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures)
         {
-            List<LocalizedString> result = new List<LocalizedString>();
+            List<LocalizedString> result = new();
             var cultureName = GetCultureName();
             var keyListKey = $"keys_{ResourcePrefix}.{cultureName}";
             List<string> existingKeys = null;
@@ -140,7 +137,7 @@ namespace JSONLocalization.NET
             return $"{ResourcePrefix}.{cultureName}.{key}";
         }
 
-        private string GetCultureName(bool useParentCulture = false)
+        private static string GetCultureName(bool useParentCulture = false)
         {
             if (useParentCulture && !Thread.CurrentThread.CurrentCulture.IsNeutralCulture)
                 return Thread.CurrentThread.CurrentCulture.Parent.Name;
