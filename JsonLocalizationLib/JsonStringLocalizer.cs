@@ -62,7 +62,10 @@ namespace JsonLocalizationLib
             {
                 foreach (var key in existingKeys)
                 {
-                    result.Add(new LocalizedString(key, _cache.GetString(GetKeyName(key, cultureName)), false));
+                    var fullKey = GetKeyName(key, cultureName);
+                    var value = _cache.GetString(fullKey) ?? fullKey;
+                    if (!result.Any(x => x.Name == key))
+                        result.Add(new LocalizedString(key, value, false));
                 }
             }
             if (includeParentCultures && !Thread.CurrentThread.CurrentCulture.IsNeutralCulture)
@@ -78,7 +81,10 @@ namespace JsonLocalizationLib
                     {
                         foreach (var key in existingKeys)
                         {
-                            result.Add(new LocalizedString(key, _cache.GetString(GetKeyName(key, parentCultureName)), false));
+                            var fullKey = GetKeyName(key, cultureName);
+                            var value = _cache.GetString(fullKey) ?? fullKey;
+                            if (!result.Any(x => x.Name == key))
+                                result.Add(new LocalizedString(key, value, false));
                         }
                     }
                 }
