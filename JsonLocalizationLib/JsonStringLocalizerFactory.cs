@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Localization;
+using System.Reflection;
 
 namespace JsonLocalizationLib
 {
@@ -12,8 +13,18 @@ namespace JsonLocalizationLib
             _cache = cache;
         }
 
-        public IStringLocalizer Create(Type resourceSource) =>
-            new JsonStringLocalizer(_cache, resourceSource.Name);
+        public IStringLocalizer Create(Type resourceSource)
+        {
+            string[] includedTranslations = null;
+            try
+            {
+                var includedTranslationsAttribute = resourceSource.GetCustomAttribute<IncludedTranslationsAttribute>(true);
+                includedTranslations = includedTranslationsAttribute?.IncludedResources;
+            }
+            catch (Exception) { }
+            return new JsonStringLocalizer(_cache, resourceSource.Name, includedTranslations);
+        }
+            
 
         public IStringLocalizer Create(string baseName, string location) =>
             new JsonStringLocalizer(_cache, baseName, location);

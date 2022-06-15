@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Localization;
 using Newtonsoft.Json;
+using System.Globalization;
 
 namespace JsonLocalizationLib
 {
@@ -9,15 +10,17 @@ namespace JsonLocalizationLib
 
         private readonly IDistributedCache _cache;
         private readonly bool useUiCulture = true;
+        private readonly string[] _inheritedResources;
 
         //private readonly JsonSerializer _serializer = new();
 
         private readonly string _resourceSource, _location = "Resources", _baseName;
 
-        public JsonStringLocalizer(IDistributedCache cache, string resourceSource)
+        public JsonStringLocalizer(IDistributedCache cache, string resourceSource, params string[] inheritedResources)
         {
             _cache = cache;
             _resourceSource = resourceSource;
+            _inheritedResources = inheritedResources;
         }
 
         public JsonStringLocalizer(IDistributedCache cache, string baseName, string location)
@@ -34,7 +37,7 @@ namespace JsonLocalizationLib
                 string value = GetString(name);
                 if (value == null)
                     value = GetString(name, true);
-                return new LocalizedString(name, value ?? name, value == null);
+                return GenerateString(name, value);
             }
         }
 
@@ -49,11 +52,34 @@ namespace JsonLocalizationLib
             }
         }
 
-        public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures)
+        public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCulture)
+        {
+            var culture = GetCultureName();
+            return GetAllStrings(includeParentCulture, culture, _inheritedResources);
+        }
+
+        public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCulture, CultureInfo culture, params string[] includedResources)
         {
             List<LocalizedString> result = new();
-            var cultureName = GetCultureName();
-            var keyListKey = $"keys_{ResourcePrefix}.{cultureName}";
+            GetAllTranslations(ResourcePrefix, culture, includeParentCulture, result);
+            if (includedResources?.Length > 0)
+            {
+                foreach (var resourcePrefix in includedResources)
+                {
+                    GetAllTranslations(resourcePrefix, culture, includeParentCulture, result);
+                }
+            }
+            return result;
+        }
+
+        internal static LocalizedString GenerateString(string name, string value)
+        {
+            return new LocalizedString(name, value ?? name, value == null);
+        }
+
+        private void GetAllTranslations(string resourcePrefix, CultureInfo culture, bool includeParentCulture, List<LocalizedString> result)
+        {
+            var keyListKey = $"keys_{resourcePrefix}.{culture.Name}";
             List<string> existingKeys = null;
             var existingKeysString = _cache.GetString(keyListKey);
             if (existingKeysString != null)
@@ -62,18 +88,18 @@ namespace JsonLocalizationLib
             {
                 foreach (var key in existingKeys)
                 {
-                    var fullKey = GetKeyName(key, cultureName);
+                    var fullKey = GetKeyName(key, culture.Name, resourcePrefix);
                     var value = _cache.GetString(fullKey) ?? fullKey;
                     if (!result.Any(x => x.Name == key))
                         result.Add(new LocalizedString(key, value, false));
                 }
             }
-            if (includeParentCultures && !Thread.CurrentThread.CurrentCulture.IsNeutralCulture)
+            if (includeParentCulture && !culture.IsNeutralCulture)
             {
-                var parentCultureName = GetCultureName(true);
-                if (parentCultureName != cultureName)
+                var parentCulture = GetCultureName(true);
+                if (parentCulture.Name != culture.Name)
                 {
-                    keyListKey = $"keys_{ResourcePrefix}.{parentCultureName}";
+                    keyListKey = $"keys_{resourcePrefix}.{parentCulture.Name}";
                     existingKeysString = _cache.GetString(keyListKey);
                     if (existingKeysString != null)
                         existingKeys = JsonConvert.DeserializeObject<List<string>>(existingKeysString);
@@ -81,7 +107,7 @@ namespace JsonLocalizationLib
                     {
                         foreach (var key in existingKeys)
                         {
-                            var fullKey = GetKeyName(key, cultureName);
+                            var fullKey = GetKeyName(key, parentCulture.Name, resourcePrefix);
                             var value = _cache.GetString(fullKey) ?? fullKey;
                             if (!result.Any(x => x.Name == key))
                                 result.Add(new LocalizedString(key, value, false));
@@ -89,110 +115,55 @@ namespace JsonLocalizationLib
                     }
                 }
             }
-            return result;
-
-            //string filePath = GetResourceFilePath();
-            //if (File.Exists(filePath))
-            //    return GetAllStrings(filePath);
-            //else
-            //{
-            //    var parentFilePath = GetResourceFilePath(true);
-            //    if (parentFilePath != filePath)
-            //        return GetAllStrings(filePath);
-            //    return new List<LocalizedString>();
-            //}
         }
 
-        //private IEnumerable<LocalizedString> GetAllStrings(string filePath)
-        //{
-        //    using (var str = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-        //    using (var sReader = new StreamReader(str))
-        //    using (var reader = new JsonTextReader(sReader))
-        //    {
-        //        while (reader.Read())
-        //        {
-        //            if (reader.TokenType != JsonToken.PropertyName)
-        //                continue;
-        //            string key = (string)reader.Value;
-        //            reader.Read();
-        //            string value = _serializer.Deserialize<string>(reader);
-        //            yield return new LocalizedString(key, value, false);
-        //        }
-        //    }
-        //}
-
-        private string GetString(string key, bool useParentCulture = false)
+        public string GetString(string key, bool useParentCulture = false, CultureInfo culture = null)
         {
-            var keyName = GetKeyName(key, useParentCulture);
-            return _cache.GetString(keyName);
-            //string relativeFilePath = GetResourceFilePath();
-            //string fullFilePath = Path.GetFullPath(relativeFilePath);
-            //if (File.Exists(fullFilePath))
-            //{
-            //    string cacheKey = $"locale_{Thread.CurrentThread.CurrentCulture.Name}_{key}";
-            //    string cacheValue = _cache.GetString(cacheKey);
-            //    if (!string.IsNullOrEmpty(cacheValue)) return cacheValue;
-            //    string result = GetValueFromJSON(key, Path.GetFullPath(relativeFilePath));
-            //    if (!string.IsNullOrEmpty(result)) _cache.SetString(cacheKey, result);
-            //    return result;
-            //}
-            //return default(string);
+            var keyName = GetKeyName(key, useParentCulture, culture: culture);
+            var value = _cache.GetString(keyName);
+            return value ?? GetStringFromInheritedResources(keyName);
         }
 
-        private string GetKeyName(string key, bool useParentCulture = false)
+        private string GetStringFromInheritedResources(string key, bool useParentCulture = false, CultureInfo culture = null)
         {
-            return GetKeyName(key, GetCultureName(useParentCulture));
+            if (_inheritedResources?.Length > 0)
+            {
+                foreach (var resourceName in _inheritedResources)
+                {
+                    var keyName = GetKeyName(key, useParentCulture, resourceName, culture);
+                    var value = _cache.GetString(keyName);
+                    if (value != null)
+                        return value;
+                }
+            }
+            return null;
         }
 
-        private string GetKeyName(string key, string cultureName)
+        private string GetKeyName(string key, bool useParentCulture = false, string resourceName = null, CultureInfo culture = null)
         {
-            return $"{ResourcePrefix}.{cultureName}.{key}";
+            return GetKeyName(key, GetCultureName(useParentCulture, culture).Name, resourceName);
         }
 
-        private string GetCultureName(bool useParentCulture = false)
+        private string GetKeyName(string key, string cultureName, string resourceName = null)
         {
+            return $"{resourceName ?? ResourcePrefix}.{cultureName}.{key}";
+        }
+
+        private CultureInfo GetCultureName(bool useParentCulture = false, CultureInfo culture = null)
+        {
+            if (culture != null)
+            {
+                if (useParentCulture && !culture.IsNeutralCulture)
+                    return culture.Parent;
+                return culture;
+            }
             if (useParentCulture && !Thread.CurrentThread.CurrentCulture.IsNeutralCulture)
-                return useUiCulture ? Thread.CurrentThread.CurrentUICulture.Parent.Name : Thread.CurrentThread.CurrentCulture.Parent.Name;
+                return useUiCulture ? Thread.CurrentThread.CurrentUICulture.Parent : Thread.CurrentThread.CurrentCulture.Parent;
             else
-                return useUiCulture ? Thread.CurrentThread.CurrentUICulture.Name : Thread.CurrentThread.CurrentCulture.Parent.Name;
+                return useUiCulture ? Thread.CurrentThread.CurrentUICulture : Thread.CurrentThread.CurrentCulture.Parent;
         }
 
         private string ResourcePrefix => _resourceSource ?? _baseName ?? string.Empty;
 
-        //private string GetResourceFilePath(bool useParentCulture = false)
-        //{
-        //    string relativeFilePath = string.Empty;
-        //    if (!string.IsNullOrEmpty(_location))
-        //        relativeFilePath = $"{_location}/";
-        //    if (!string.IsNullOrEmpty(_resourceSource))
-        //        relativeFilePath = $"{relativeFilePath}{_resourceSource}.";
-        //    else if (!string.IsNullOrEmpty(_baseName))
-        //        relativeFilePath = $"{relativeFilePath}{_baseName}.";
-        //    if (useParentCulture && !Thread.CurrentThread.CurrentCulture.IsNeutralCulture)
-        //        relativeFilePath = $"{relativeFilePath}{Thread.CurrentThread.CurrentCulture.Parent.Name}";
-        //    else
-        //        relativeFilePath = $"{relativeFilePath}{Thread.CurrentThread.CurrentCulture.Name}";
-        //    return $"{relativeFilePath}.json";
-        //}
-
-        //private string GetValueFromJSON(string propertyName, string filePath)
-        //{
-        //    if (propertyName == null) return default;
-        //    if (filePath == null) return default;
-        //    using (var str = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-        //    using (var sReader = new StreamReader(str))
-        //    using (var reader = new JsonTextReader(sReader))
-        //    {
-        //        while (reader.Read())
-        //        {
-        //            if (reader.TokenType == JsonToken.PropertyName && (string)reader.Value == propertyName)
-        //            {
-        //                reader.Read();
-        //                return _serializer.Deserialize<string>(reader);
-        //            }
-        //        }
-        //        return default;
-        //    }
-        //}
     }
 }
