@@ -28,16 +28,20 @@ namespace JsonLocalizationLib
                 var path = Path.GetDirectoryName(GetType().Assembly.Location);
                 resourceLocation = Path.Combine(path, resourceLocation);
             }
-            resourceFileWatcher = new FileSystemWatcher(resourceLocation, resourceFilePattern);
-            resourceFileWatcher.Changed += ResourceFileWatcher_Changed;
-            resourceFileWatcher.Created += ResourceFileWatcher_Created;
-            resourceFileWatcher.Renamed += ResourceFileWatcher_Renamed;
-            resourceFileWatcher.Deleted += ResourceFileWatcher_Deleted;
-            resourceFileWatcher.Error += ResourceFileWatcher_Error;
+            if (Directory.Exists(resourceLocation))
+            {
+                resourceFileWatcher = new FileSystemWatcher(resourceLocation, resourceFilePattern);
+                resourceFileWatcher.Changed += ResourceFileWatcher_Changed;
+                resourceFileWatcher.Created += ResourceFileWatcher_Created;
+                resourceFileWatcher.Renamed += ResourceFileWatcher_Renamed;
+                resourceFileWatcher.Deleted += ResourceFileWatcher_Deleted;
+                resourceFileWatcher.Error += ResourceFileWatcher_Error;
+            }
         }
 
         public void Start()
         {
+            if (resourceFileWatcher == null) return;
             try
             {
                 var resourceFiles = Directory.GetFiles(resourceLocation, resourceFilePattern);
@@ -53,6 +57,7 @@ namespace JsonLocalizationLib
 
         public void Stop()
         {
+            if (resourceFileWatcher == null) return;
             try
             {
                 resourceFileWatcher.EnableRaisingEvents = false;
