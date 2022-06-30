@@ -17,12 +17,17 @@ namespace JsonLocalizationLib
         private readonly JsonSerializer _serializer = new();
         private readonly FileSystemWatcher resourceFileWatcher;
         private readonly string resourceFilePattern = "*.json";
+        private readonly int fileProcessingDelay;
+        private readonly ConcurrentDictionary<string, DateTime> lastFileUpdates;
+        private readonly ConcurrentDictionary<string, object> fileAccessLocks;
 
         public JsonFileCache(IDistributedCache cache, ILogger<JsonFileCache> logger)
         {
             this.cache = cache;
             this.logger = logger;
             fileHashes = new ConcurrentDictionary<string, string>();
+            lastFileUpdates = new ConcurrentDictionary<string, DateTime>();
+            fileAccessLocks = new ConcurrentDictionary<string, object>();
             if (!Environment.UserInteractive) // app running as a service
             {
                 var path = Path.GetDirectoryName(GetType().Assembly.Location);
@@ -37,6 +42,7 @@ namespace JsonLocalizationLib
                 resourceFileWatcher.Deleted += ResourceFileWatcher_Deleted;
                 resourceFileWatcher.Error += ResourceFileWatcher_Error;
             }
+            fileProcessingDelay = 1000;
         }
 
         public void Start()
@@ -46,7 +52,7 @@ namespace JsonLocalizationLib
             {
                 var resourceFiles = Directory.GetFiles(resourceLocation, resourceFilePattern);
                 foreach (var resourceFile in resourceFiles)
-                    FileChanged(resourceFile);
+                    FileChanged(resourceFile, true);
             }
             catch (Exception e)
             {
@@ -73,20 +79,26 @@ namespace JsonLocalizationLib
 
         private void ResourceFileWatcher_Deleted(object sender, FileSystemEventArgs e)
         {
+            logger.LogInformation($"Resource file {e.FullPath} has been removed");
             FileRemoved(e.FullPath);
         }
 
         private void ResourceFileWatcher_Renamed(object sender, RenamedEventArgs e)
         {
             logger.LogInformation($"Resource file has been renamed from {e.OldFullPath} to {e.FullPath}");
-            FileChanged(e.FullPath);
-            FileRemoved(e.OldFullPath);
+            Task.Run(() => FileRenamed(e.OldFullPath, e.FullPath));
+        }
+
+        private void FileRenamed(string oldName, string newName)
+        {
+            FileChanged(newName);
+            FileRemoved(oldName);
         }
 
         private void ResourceFileWatcher_Created(object sender, FileSystemEventArgs e)
         {
             logger.LogInformation($"New resource file detected: {e.FullPath}");
-            FileChanged(e.FullPath);
+            Task.Run(() => FileChanged(e.FullPath));
         }
 
         private void ResourceFileWatcher_Error(object sender, ErrorEventArgs e)
@@ -97,12 +109,27 @@ namespace JsonLocalizationLib
         private void ResourceFileWatcher_Changed(object sender, FileSystemEventArgs e)
         {
             logger.LogInformation($"Resource file has changed: {e.FullPath}");
-            FileChanged(e.FullPath);
+            Task.Run(() => FileChanged(e.FullPath));
         }
 
-        private void FileChanged(string fileNameAndPath)
+        private void FileChanged(string fileNameAndPath, bool isInitial = false)
         {
-            string hash;
+            string hash = null;
+            var time = DateTime.Now;
+            var fileLock = fileAccessLocks.GetOrAdd(fileNameAndPath, () => new object());
+            lock (fileLock)
+            {
+                var previousUpdate = lastFileUpdates.GetValueOrDefault(fileNameAndPath);
+                int nbDelay = 2;
+                if (previousUpdate.AddSeconds(nbDelay) > time)
+                {
+                    logger.LogInformation($"{fileNameAndPath} was last updated less than {nbDelay} seconds ago, skipping update");
+                    return;
+                }
+                var lastUpdate = lastFileUpdates.AddOrUpdate(fileNameAndPath, time, (key, existingValue) => time);
+            }
+            if (!isInitial)
+                Delay(fileNameAndPath);
             try
             {
                 hash = ComputeFileChecksum(fileNameAndPath);
@@ -120,6 +147,9 @@ namespace JsonLocalizationLib
             });
             if (hash != previousHash)
             {
+                lastFileUpdates.AddOrUpdate(fileNameAndPath, time, (key, existingValue) => time);
+                if (previousHash != null)
+                    logger.LogInformation($"Resource file {fileNameAndPath} has a different hash, reloading file");
                 var newStrings = ReadFile(fileNameAndPath);
                 if (newStrings.Count > 0)
                 {
@@ -133,17 +163,30 @@ namespace JsonLocalizationLib
                         var existingKeysString = cache.GetString(existingKeysKey);
                         if (existingKeysString != null)
                             existingKeys = JsonConvert.DeserializeObject<List<string>>(existingKeysString);
+                        var addedKeys = new List<string>();
+                        var updatedKeys = new List<string>();
                         foreach (var newString in newStrings)
                         {
                             var key = $"{resourceName}.{locale}.{newString.Name}";
+                            var existingValue = cache.GetString(key);
+                            if (existingValue == null)
+                                addedKeys.Add(key);
+                            else if (string.Compare(existingValue, newString.Value, StringComparison.OrdinalIgnoreCase) != 0)
+                                updatedKeys.Add(key);
                             cache.SetString(key, newString.Value);
                         }
+                        if (addedKeys.Count > 0 && previousHash != null)
+                            logger.LogInformation($"Adding {addedKeys.Count} new strings for {resourceName}, locale {locale}: {string.Join(",", addedKeys)}");
+                        if (updatedKeys.Count > 0 && previousHash != null)
+                            logger.LogInformation($"Updated {updatedKeys.Count} strings for {resourceName}, locale {locale}: {string.Join(",", updatedKeys)}");
                         var newKeys = newStrings.Select(x => x.Name).ToList();
                         if (existingKeys != null)
                         {
                             var toBeRemoved = newKeys.Where(x => !existingKeys.Contains(x)).ToList();
                             foreach (var key in toBeRemoved)
                                 cache.Remove(key);
+                            if (toBeRemoved.Count > 0)
+                                logger.LogInformation($"Removed file {toBeRemoved.Count} strings from {fileName}, locale {locale}: {string.Join(",", toBeRemoved)}");
                         }
                         var newKeysString = JsonConvert.SerializeObject(newKeys);
                         cache.SetString(existingKeysKey, newKeysString);
@@ -152,6 +195,23 @@ namespace JsonLocalizationLib
                     {
                         logger.LogError($"Unhandled error processing added/changed file {fileNameAndPath}: {e.Message}");
                     }
+                }
+                else
+                    logger.LogWarning($"Resource file {fileNameAndPath} contains 0 strings");
+            }
+        }
+
+        private void Delay(string fileName)
+        {
+            if (fileProcessingDelay > 0)
+            {
+                try
+                {
+                    Task.Delay(fileProcessingDelay).Wait();
+                }
+                catch (Exception e)
+                {
+                    logger.LogWarning($"exception delaying processing of {fileName}: {e.Message}", 2);
                 }
             }
         }
@@ -174,6 +234,8 @@ namespace JsonLocalizationLib
                     foreach (var key in existingKeys)
                         cache.Remove(key);
                 }
+                if (existingKeys.Count > 0)
+                    logger.LogInformation($"Removed file {existingKeys.Count} strings from {fileName}, locale {locale} because file was deleted");
             }
             catch (Exception e)
             {
@@ -206,9 +268,9 @@ namespace JsonLocalizationLib
             return result;
         }
 
-        public static string ComputeFileChecksum(string path)
+        public static string ComputeFileChecksum(string fileName)
         {
-            using var fs = File.OpenRead(path);
+            using var fs = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read);
             using var sha1 = SHA1.Create();
             byte[] hash = sha1.ComputeHash(fs);
             var formatted = new StringBuilder(2 * hash.Length);

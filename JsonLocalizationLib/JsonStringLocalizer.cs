@@ -96,7 +96,7 @@ namespace JsonLocalizationLib
             }
             if (includeParentCulture && !culture.IsNeutralCulture)
             {
-                var parentCulture = GetCultureName(true);
+                var parentCulture = culture.Parent;
                 if (parentCulture.Name != culture.Name)
                 {
                     keyListKey = $"keys_{resourcePrefix}.{parentCulture.Name}";
