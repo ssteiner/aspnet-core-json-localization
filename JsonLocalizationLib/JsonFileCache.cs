@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
@@ -21,14 +22,18 @@ namespace JsonLocalizationLib
         private readonly ConcurrentDictionary<string, DateTime> lastFileUpdates;
         private readonly ConcurrentDictionary<string, object> fileAccessLocks;
 
-        public JsonFileCache(IDistributedCache cache, ILogger<JsonFileCache> logger)
+        public JsonFileCache(IDistributedCache cache, ILogger<JsonFileCache> logger, IOptions<JsonTranslationOptions> options)
         {
             this.cache = cache;
             this.logger = logger;
             fileHashes = new ConcurrentDictionary<string, string>();
             lastFileUpdates = new ConcurrentDictionary<string, DateTime>();
             fileAccessLocks = new ConcurrentDictionary<string, object>();
-            if (!Environment.UserInteractive) // app running as a service
+            if (!string.IsNullOrEmpty(options.Value?.ResourceFolder))
+                resourceLocation = options.Value.ResourceFolder;
+            if (!string.IsNullOrEmpty(options.Value?.ResourcePath))
+                resourceLocation = options.Value.ResourcePath;
+            else if (!Environment.UserInteractive) // app running as a service
             {
                 var path = Path.GetDirectoryName(GetType().Assembly.Location);
                 resourceLocation = Path.Combine(path, resourceLocation);
@@ -42,12 +47,15 @@ namespace JsonLocalizationLib
                 resourceFileWatcher.Deleted += ResourceFileWatcher_Deleted;
                 resourceFileWatcher.Error += ResourceFileWatcher_Error;
             }
+            else
+                logger.LogCritical($"Resource location {resourceLocation} does not exist");
             fileProcessingDelay = 1000;
         }
 
         public void Start()
         {
             if (resourceFileWatcher == null) return;
+            logger.LogInformation($"Starting to watch directory {resourceFileWatcher.Path}");
             try
             {
                 var resourceFiles = Directory.GetFiles(resourceLocation, resourceFilePattern);
