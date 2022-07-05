@@ -26,8 +26,9 @@ namespace JsonLocalizationLib
             string[] includedTranslations = null;
             try
             {
-                var includedTranslationsAttribute = resourceSource.GetCustomAttribute<IncludedTranslationsAttribute>(true);
-                includedTranslations = includedTranslationsAttribute?.IncludedResources;
+                var includedTranslationsAttribute = resourceSource.GetCustomAttributes<IncludedTranslationsAttribute>(true);
+                if (includedTranslationsAttribute.Any())
+                    includedTranslations = includedTranslationsAttribute.SelectMany(x => x.IncludedResources)?.Distinct()?.ToArray();
             }
             catch (Exception) { }
             return new JsonStringLocalizer(_cache, resourceSource.Name, includedTranslations);

@@ -1,5 +1,6 @@
 ﻿namespace JsonLocalizationLib
 {
+    [AttributeUsage(AttributeTargets.Class)]
     public class IncludedTranslationsAttribute: Attribute
     {
 

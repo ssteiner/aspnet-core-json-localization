@@ -62,13 +62,25 @@ namespace JsonLocalizationLib
         {
             List<LocalizedString> result = new();
             GetAllTranslations(ResourcePrefix, culture, includeParentCulture, result);
+            bool sort = false;
             if (includedResources?.Length > 0)
             {
+                sort = true;
                 foreach (var resourcePrefix in includedResources)
                 {
                     GetAllTranslations(resourcePrefix, culture, includeParentCulture, result);
                 }
             }
+            else if (_inheritedResources?.Length > 0)
+            {
+                sort = true;
+                foreach (var resourcePrefix in _inheritedResources)
+                {
+                    GetAllTranslations(resourcePrefix, culture, includeParentCulture, result);
+                }
+            }
+            if (sort)
+                result = result.OrderBy(n => n.Name).ToList();
             return result;
         }
 
