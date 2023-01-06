@@ -1,3 +1,4 @@
+using JsonLocalizationLib;
 using JsonLocalizationLib.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -22,7 +23,11 @@ namespace JSONLocalization.NET
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.EnableJsonFileLocalization();
+            services.Configure<JsonTranslationOptions>(Configuration.GetSection("JsonLocalization"));
+            services.EnableJsonFileLocalization(options => 
+            {
+                options.ResourcesPath = "Resources";
+            });
             services.AddControllers();
             services.AddSwaggerGen(c =>
             {

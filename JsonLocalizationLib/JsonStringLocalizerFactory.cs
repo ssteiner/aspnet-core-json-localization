@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Reflection;
 
@@ -9,11 +10,13 @@ namespace JsonLocalizationLib
     {
         private readonly IDistributedCache _cache;
         private readonly ConcurrentDictionary<Type, IStringLocalizer> localizerCache;
+        private readonly IOptionsMonitor<JsonTranslationOptions> options;
 
-        public JsonStringLocalizerFactory(IDistributedCache cache)
+        public JsonStringLocalizerFactory(IDistributedCache cache, IOptionsMonitor<JsonTranslationOptions> optionsMonitor)
         {
             _cache = cache;
             localizerCache = new ConcurrentDictionary<Type, IStringLocalizer>();
+            options = optionsMonitor;
         }
 
         public IStringLocalizer Create(Type resourceSource)
@@ -31,10 +34,10 @@ namespace JsonLocalizationLib
                     includedTranslations = includedTranslationsAttribute.SelectMany(x => x.IncludedResources)?.Distinct()?.ToArray();
             }
             catch (Exception) { }
-            return new JsonStringLocalizer(_cache, resourceSource.Name, includedTranslations);
+            return new JsonStringLocalizer(_cache, resourceSource.Name, options, includedTranslations);
         }
 
         public IStringLocalizer Create(string baseName, string location) =>
-            new JsonStringLocalizer(_cache, baseName, location);
+            new JsonStringLocalizer(_cache, baseName, location, options);
     }
 }

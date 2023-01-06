@@ -9,16 +9,13 @@ namespace JsonLocalizationLib.Extensions
         /// gets a localized string in case the localizer is a cref="JsonStringLocalizer"
         /// </summary>
         /// <param name="localizer"></param>
-        /// <param name="useParentCulture">also search the parent culture for a match</param>
         /// <param name="cultureName">specific culture name to use</param>
         /// <returns></returns>
-        public static LocalizedString GetString(this IStringLocalizer localizer, string name, bool useParentCulture = true, CultureInfo culture = null)
+        public static LocalizedString GetString(this IStringLocalizer localizer, string name, CultureInfo culture = null)
         {
             if (localizer is JsonStringLocalizer jsonStringLocalizer)
             {
-                var value = jsonStringLocalizer.GetString(name, false, culture);
-                if (value == null && useParentCulture)
-                    value = jsonStringLocalizer.GetString(name, true, culture);
+                var value = jsonStringLocalizer.GetString(name, culture);
                 return JsonStringLocalizer.GenerateString(name, value);
             }
             return localizer.GetString(name);

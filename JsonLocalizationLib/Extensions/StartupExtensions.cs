@@ -21,7 +21,7 @@ namespace JsonLocalizationLib.Extensions
 
         public static IApplicationBuilder ConfigureJsonFileLocalization(this IApplicationBuilder app, RequestLocalizationOptions options = null)
         {
-            var myApp = app;
+            IApplicationBuilder myApp;
             if (options != null)
                 myApp = app.UseRequestLocalization(options);
             else
@@ -33,8 +33,7 @@ namespace JsonLocalizationLib.Extensions
         {
             var fileCache = app.ApplicationServices.GetService<JsonFileCache>();
             var lifeTime = app.ApplicationServices.GetService<IHostApplicationLifetime>();
-            if (lifeTime != null)
-                lifeTime.ApplicationStopping.Register(() => OnShutDown(fileCache));
+            lifeTime?.ApplicationStopping.Register(() => OnShutDown(fileCache));
             Task.Run(() => fileCache.Start());
             return app.UseMiddleware<LocalizationMiddleware>();
         }
