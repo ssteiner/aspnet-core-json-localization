@@ -35,8 +35,7 @@ namespace JsonLocalizationLib
             get
             {
                 string value = GetString(name);
-                if (value == null)
-                    value = GetString(name, true);
+                value ??= GetString(name, true);
                 return GenerateString(name, value);
             }
         }
@@ -68,7 +67,7 @@ namespace JsonLocalizationLib
                 sort = true;
                 foreach (var resourcePrefix in includedResources)
                 {
-                    GetAllTranslations(resourcePrefix, culture, includeParentCulture, result);
+                    GetAllTranslations(resourcePrefix, culture, includeParentCulture, result, true);
                 }
             }
             else if (_inheritedResources?.Length > 0)
@@ -76,7 +75,7 @@ namespace JsonLocalizationLib
                 sort = true;
                 foreach (var resourcePrefix in _inheritedResources)
                 {
-                    GetAllTranslations(resourcePrefix, culture, includeParentCulture, result);
+                    GetAllTranslations(resourcePrefix, culture, includeParentCulture, result, true);
                 }
             }
             if (sort)
@@ -89,7 +88,7 @@ namespace JsonLocalizationLib
             return new LocalizedString(name, value ?? name, value == null);
         }
 
-        private void GetAllTranslations(string resourcePrefix, CultureInfo culture, bool includeParentCulture, List<LocalizedString> result)
+        private void GetAllTranslations(string resourcePrefix, CultureInfo culture, bool includeParentCulture, List<LocalizedString> result, bool isInherited = false)
         {
             var keyListKey = $"keys_{resourcePrefix}.{culture.Name}";
             List<string> existingKeys = null;
@@ -103,7 +102,7 @@ namespace JsonLocalizationLib
                     var fullKey = GetKeyName(key, culture.Name, resourcePrefix);
                     var value = _cache.GetString(fullKey) ?? fullKey;
                     if (!result.Any(x => x.Name == key))
-                        result.Add(new LocalizedString(key, value, false));
+                        result.Add(new LocalizedString(key, value, false, isInherited ? $"{resourcePrefix}.{culture.Name}": null));
                 }
             }
             if (includeParentCulture && !culture.IsNeutralCulture)
@@ -122,7 +121,7 @@ namespace JsonLocalizationLib
                             var fullKey = GetKeyName(key, parentCulture.Name, resourcePrefix);
                             var value = _cache.GetString(fullKey) ?? fullKey;
                             if (!result.Any(x => x.Name == key))
-                                result.Add(new LocalizedString(key, value, false));
+                                result.Add(new LocalizedString(key, value, false, isInherited ? $"{resourcePrefix}.{parentCulture.Name}": null));
                         }
                     }
                 }
